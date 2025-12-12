@@ -6,7 +6,7 @@ Authors: Renald James Legaspi[1]*, Alison Lee You Voon[1]*, Katharine E. Magor[1
 [2] Li Ka Shing Institute of Virology, University of Alberta, Edmonton, AB, Canada
 
 Data Availability:
-GEO Accession: To be provided
+GEO Accession: GSE313637
 
-NCBI Project ID: PRJNA1379687 
+
 
