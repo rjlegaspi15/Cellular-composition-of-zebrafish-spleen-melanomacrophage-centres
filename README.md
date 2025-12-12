@@ -6,7 +6,7 @@ Authors: Renald James Legaspi[1]*, Alison Lee You Voon[1]*, Katharine E. Magor[1
 [1] Department of Biological Sciences, University of Alberta, Edmonton, AB, Canada 
 [2] Li Ka Shing Institute of Virology, University of Alberta, Edmonton, AB, Canada
 
-<u>Data Availability</u>
+<ins>Data Availability</ins>
 GEO Accession: GSE313637
 
 
