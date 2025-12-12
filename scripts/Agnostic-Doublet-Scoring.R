@@ -1,3 +1,25 @@
+###### Finding doublets
+
+install.packages('BiocManager')
+BiocManager::install('glmGamPoi')
+
+spleen.doublets <- CreateSeuratObject(counts = spleen.data, project = "spleen_mmc", min.cells = 3, min.features = 200) %>%
+    SCTransform() %>%
+    RunPCA() %>%
+    FindNeighbors(dims = 1:30) %>%
+    RunUMAP(dims = 1:30, reduction.name = "umap") 
+
+pK <- paramSweep(spleen.doublets, PCs = 1:10, sct = TRUE) %>% summarizeSweep(GT = FALSE) %>% find.pK()
+maxpK <- 0.2
+nExp <- round(0.008 * ncol(spleen.doublets))
+
+spleen_doublets <- doubletFinder(
+  spleen.doublets, PCs = 1:30, pN = 0.25, pK = maxpK,
+  nExp = nExp, sct = True
+)
+
+obj <- spleen_doublets
+
 ## ========= doublets_pairs_lineage_agnostic_trueIDs_conf.R =========
 suppressPackageStartupMessages({
   library(Seurat)
