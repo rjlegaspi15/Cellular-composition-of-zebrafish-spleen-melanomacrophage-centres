@@ -131,3 +131,64 @@ ggplot(enrichment_df, aes(x = Cluster, y = Enrichment_Score, fill = Enrichment_S
        y = "Enrichment Score (MMC fraction - PBS fraction)",
        x = "Cluster") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+#####################
+
+# Ensure enrichment_df has Cluster, MMC, PBS columns
+enrichment_df <- cluster_table %>%
+  group_by(Cluster, Treatment) %>%
+  summarise(n_cells = n(), .groups = "drop") %>%
+  tidyr::pivot_wider(
+    names_from = Treatment,
+    values_from = n_cells,
+    values_fill = 0   # Fill missing combinations with 0
+  )
+
+# Fix column names explicitly
+colnames(enrichment_df) <- c("Cluster", "MMC", "PBS")
+
+# Add totals and enrichment scores
+enrichment_df <- enrichment_df %>%
+  mutate(
+    Total_cells = MMC + PBS,
+    Fraction_MMC = MMC / Total_cells,
+    Fraction_PBS = PBS / Total_cells,
+    Enrichment_Score = Fraction_MMC - Fraction_PBS
+  )
+
+# Convert to long format for stacked barplot
+enrichment_long <- enrichment_df %>%
+  pivot_longer(
+    cols = c("MMC", "PBS"),
+    names_to = "Treatment",
+    values_to = "n_cells"
+  )
+
+# Add percent column for line graph
+enrichment_long <- enrichment_long %>%
+  group_by(Cluster) %>%
+  mutate(Percent = n_cells / sum(n_cells) * 100) %>%
+  ungroup()
+
+# Stacked barplot
+p1 <- ggplot(enrichment_long, aes(x = Cluster, y = n_cells, fill = Treatment)) +
+  geom_bar(stat = "identity") +
+  geom_text(
+    data = enrichment_df,
+    aes(x = Cluster, y = Total_cells, label = Total_cells),
+    inherit.aes = FALSE, vjust = -0.5, size = 3
+  ) +
+  scale_fill_manual(values = c("MMC" = "steelblue", "PBS" = "lightgrey")) +
+  theme_minimal() +
+  labs(y = "Number of cells", x = "Cluster")
+
+# Line graph for percent
+p2 <- ggplot(enrichment_long, aes(x = Cluster, y = Percent, color = Treatment, group = Treatment)) +
+  geom_line() + geom_point() +
+  scale_color_manual(values = c("MMC" = "steelblue", "PBS" = "lightgrey")) +
+  theme_minimal() +
+  labs(y = "Percent of cells", x = "Cluster")
+
+# Combine
+library(gridExtra)
+grid.arrange(p1, p2, ncol = 1)
