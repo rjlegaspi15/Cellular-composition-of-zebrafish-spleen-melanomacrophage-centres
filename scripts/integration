@@ -11,6 +11,12 @@ library(ggplot2)
 # ----------------------------
 # 1. LOAD & PREPROCESS DATASETS
 # ----------------------------
+spleen_ref <- CreateSeuratObject(
+  counts = spleen_counts,
+  project = "spleen_ref",
+  min.cells = 3,
+  min.features = 200
+)
 
 
 spleen_ref[["percent.mt"]] <- PercentageFeatureSet(spleen_ref, pattern = "^MT-")
@@ -75,7 +81,10 @@ DefaultAssay(combined) <- "integrated"
 combined <- ScaleData(combined, verbose = FALSE)
 combined <- RunPCA(combined, verbose = FALSE)
 combined <- FindNeighbors(combined, dims = 1:30)
-combined <- FindClusters(combined, resolution = 0.5)
+####### Checkpoint ###################
+orig_combined <- combined
+######################################
+combined <- FindClusters(combined, resolution = 0.3)
 combined <- RunUMAP(combined, dims = 1:30)
 
 # ===========================
@@ -83,17 +92,17 @@ combined <- RunUMAP(combined, dims = 1:30)
 # ===========================
 cluster_table <- data.frame(
   Cell = colnames(combined),
-  Cluster = combined$integrated_snn_res.0.5,
+  Cluster = combined$integrated_snn_res.0.3,
   Treatment = combined$Treatment
 )
 
-write.csv(cluster_table, "C:/Your/Path/spleen_clusters_metadata.csv", row.names = FALSE)
+write.csv(cluster_table, "spleen_clusters_metadata.csv", row.names = FALSE)
 
 # ===========================
 # 7. Find markers for all clusters
 # ===========================
-cluster_markers <- FindAllMarkers(combined, only.pos = TRUE)
-write.csv(cluster_markers, "C:/Your/Path/spleen_cluster_markers.csv", row.names = FALSE)
+#cluster_markers <- FindAllMarkers(combined, only.pos = TRUE)
+#write.csv(cluster_markers, "C:/Your/Path/spleen_cluster_markers.csv", row.names = FALSE)
 
 # ===========================
 # 8. Calculate enrichment of clusters in MMC vs PBS
@@ -122,15 +131,6 @@ enrichment_df$Cluster <- factor(enrichment_df$Cluster,
 # ===========================
 # 9. Barplot of enrichment with cell counts
 # ===========================
-ggplot(enrichment_df, aes(x = Cluster, y = Enrichment_Score, fill = Enrichment_Score > 0)) +
-  geom_bar(stat = "identity") +
-  geom_text(aes(label = Total_cells), vjust = -0.5, size = 3) +  # add total cells on top
-  scale_fill_manual(values = c("FALSE" = "lightgrey", "TRUE" = "steelblue")) +
-  theme_minimal() +
-  labs(title = "Cluster Enrichment MMC vs PBS",
-       y = "Enrichment Score (MMC fraction - PBS fraction)",
-       x = "Cluster") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
 #####################
 
@@ -170,25 +170,29 @@ enrichment_long <- enrichment_long %>%
   mutate(Percent = n_cells / sum(n_cells) * 100) %>%
   ungroup()
 
+enrichment_long <- enrichment_long %>%
+  rename(Dataset = Treatment) %>%
+  mutate(Dataset = recode(Dataset, "PBS" = "PBS-spleen"))
+
 # Stacked barplot
-p1 <- ggplot(enrichment_long, aes(x = Cluster, y = n_cells, fill = Treatment)) +
-  geom_bar(stat = "identity") +
-  geom_text(
-    data = enrichment_df,
-    aes(x = Cluster, y = Total_cells, label = Total_cells),
-    inherit.aes = FALSE, vjust = -0.5, size = 3
-  ) +
-  scale_fill_manual(values = c("MMC" = "steelblue", "PBS" = "lightgrey")) +
-  theme_minimal() +
-  labs(y = "Number of cells", x = "Cluster")
-
-# Line graph for percent
-p2 <- ggplot(enrichment_long, aes(x = Cluster, y = Percent, color = Treatment, group = Treatment)) +
-  geom_line() + geom_point() +
-  scale_color_manual(values = c("MMC" = "steelblue", "PBS" = "lightgrey")) +
-  theme_minimal() +
-  labs(y = "Percent of cells", x = "Cluster")
-
-# Combine
-library(gridExtra)
-grid.arrange(p1, p2, ncol = 1)
+ggplot(enrichment_long, aes(x = Cluster, y = n_cells, fill = Dataset)) +
+    geom_bar(stat = "identity") +
+    geom_text(
+        data = enrichment_df,
+        aes(x = Cluster, y = Total_cells, label = Total_cells),
+        inherit.aes = FALSE, vjust = -0.5, size = 3
+    ) +
+    scale_fill_manual(values = c("MMC" = "steelblue", "PBS" = "lightgrey")) +
+    theme_minimal() +
+    labs(y = "Number of cells", x = "Cluster") + 
+    
+    scale_y_continuous(expand = c(0, 0)) +   # bars touch y = 0
+    scale_x_discrete(expand = c(0, 0)) +     # no side padding
+    theme_minimal() +
+    theme(
+        panel.grid = element_blank(),              # remove gridlines
+        axis.line.x = element_line(size = 1),
+        axis.line.y = element_line(size = 1),
+        axis.ticks = element_line(size = 1),
+        axis.ticks.length = unit(3, "pt")          # ticks outside
+    )
