@@ -1,0 +1,106 @@
+library(Seurat)
+
+spleen_counts <- Read10X(data.dir = "C:/Users/LABADMIN-new/Desktop/LabData/Grad_students/RJ/Alison_scRNAseq/final_run/pbs")
+spleen_counts_ncbi <- Read10X(data.dir = "C:/Users/LABADMIN-new/Desktop/LabData/Grad_students/RJ/Alison_scRNAseq/against_ncbi_ref/filtered_feature_bc_matrix")
+
+
+library(Seurat)
+library(dplyr)
+library(ggplot2)
+
+# ----------------------------
+# 1. LOAD & PREPROCESS DATASETS
+# ----------------------------
+
+# Annotate treatment groups for enrichment
+spleen_ref$Treatment <- "PBS"
+spleen_ncbi$Treatment <- "MMC"
+
+# ===========================
+# 3. SCTransform normalization
+# ===========================
+spleen_ref <- SCTransform(spleen_ref, verbose = FALSE)
+spleen_ncbi <- SCTransform(spleen_ncbi, verbose = FALSE)
+
+# ===========================
+# 4. Integration (RPCA)
+# ===========================
+datasets_list <- list(PBS = spleen_ref, MMC = spleen_ncbi)
+
+# Select features for integration
+features <- SelectIntegrationFeatures(datasets_list, nfeatures = 3000)
+
+# Prep for SCT integration
+datasets_list <- PrepSCTIntegration(datasets_list, anchor.features = features)
+
+# Run PCA for RPCA
+for(i in 1:length(datasets_list)){
+  datasets_list[[i]] <- RunPCA(datasets_list[[i]], features = features, verbose = FALSE)
+}
+
+# Find anchors with RPCA
+anchors <- FindIntegrationAnchors(
+  object.list = datasets_list,
+  normalization.method = "SCT",
+  anchor.features = features,
+  reduction = "rpca",
+  dims = 1:30
+)
+
+# Integrate data
+combined <- IntegrateData(anchorset = anchors, normalization.method = "SCT", dims = 1:30)
+DefaultAssay(combined) <- "integrated"
+
+# ===========================
+# 5. Clustering & UMAP
+# ===========================
+combined <- ScaleData(combined, verbose = FALSE)
+combined <- RunPCA(combined, verbose = FALSE)
+combined <- FindNeighbors(combined, dims = 1:30)
+combined <- FindClusters(combined, resolution = 0.5)
+combined <- RunUMAP(combined, dims = 1:30)
+
+# ===========================
+# 6. Export cluster and metadata tables
+# ===========================
+cluster_table <- data.frame(
+  Cell = colnames(combined),
+  Cluster = combined$integrated_snn_res.0.5,
+  Treatment = combined$Treatment
+)
+
+write.csv(cluster_table, "C:/Your/Path/spleen_clusters_metadata.csv", row.names = FALSE)
+
+# ===========================
+# 7. Find markers for all clusters
+# ===========================
+cluster_markers <- FindAllMarkers(combined, only.pos = TRUE)
+write.csv(cluster_markers, "C:/Your/Path/spleen_cluster_markers.csv", row.names = FALSE)
+
+# ===========================
+# 8. Calculate enrichment of clusters in MMC vs PBS
+# ===========================
+enrichment_df <- cluster_table %>%
+  group_by(Cluster, Treatment) %>%
+  summarise(n_cells = n(), .groups = "drop") %>%
+  pivot_wider(names_from = Treatment, values_from = n_cells, values_fill = 0) %>%
+  mutate(Total = MMC + PBS,
+         Fraction_MMC = MMC / Total,
+         Fraction_PBS = PBS / Total,
+         Enrichment_Score = Fraction_MMC - Fraction_PBS)  # positive = MMC enriched
+
+# Order clusters by enrichment score
+enrichment_df$Cluster <- factor(enrichment_df$Cluster,
+                                levels = enrichment_df$Cluster[order(enrichment_df$Enrichment_Score, decreasing = TRUE)])
+
+# ===========================
+# 9. Barplot of enrichment
+# ===========================
+ggplot(enrichment_df, aes(x = Cluster, y = Enrichment_Score, fill = Enrichment_Score > 0)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = c("FALSE" = "lightgrey", "TRUE" = "steelblue")) +
+  theme_minimal() +
+  labs(title = "Cluster Enrichment MMC vs PBS",
+       y = "Enrichment Score (MMC fraction - PBS fraction)",
+       x = "Cluster") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
