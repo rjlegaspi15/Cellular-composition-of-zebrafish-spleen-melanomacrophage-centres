@@ -33,7 +33,7 @@ spleen_ncbi <- CreateSeuratObject(
 if (!"percent.mt" %in% colnames(spleen_ncbi@meta.data)) {
   spleen_ncbi[["percent.mt"]] <- PercentageFeatureSet(spleen_ncbi, pattern = "^MT-")
 }
-spleen_ncbi <- subset(spleen_ncbi, subset = nFeature_RNA > 200 & percent.mt < 5)
+spleen_ncbi <- subset(spleen_ncbi, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 5)
 
 
 # Annotate treatment groups for enrichment
@@ -84,7 +84,8 @@ combined <- FindNeighbors(combined, dims = 1:30)
 ####### Checkpoint ###################
 orig_combined <- combined
 ######################################
-combined <- FindClusters(combined, resolution = 0.3)
+combined <- orig_combined
+combined <- FindClusters(combined, resolution = 0.5)
 combined <- RunUMAP(combined, dims = 1:30)
 
 # ===========================
@@ -92,11 +93,17 @@ combined <- RunUMAP(combined, dims = 1:30)
 # ===========================
 cluster_table <- data.frame(
   Cell = colnames(combined),
-  Cluster = combined$integrated_snn_res.0.3,
+  Cluster = combined$integrated_snn_res.0.5,
   Treatment = combined$Treatment
 )
 
-write.csv(cluster_table, "spleen_clusters_metadata.csv", row.names = FALSE)
+cluster_table_filtered <- cluster_table %>%
+  filter(Treatment == "MMC") %>%              # keep only MMC rows
+  rename(Barcode = Cell) %>%                  # rename 'Cell' column to 'Barcode'
+  mutate(Barcode = str_sub(Barcode, 1, 18)) 
+rownames(cluster_table_filtered) <- NULL
+
+write.csv(cluster_table_filtered, "spleen_clusters_metadata.csv", row.names = FALSE)
 
 # ===========================
 # 7. Find markers for all clusters
@@ -186,8 +193,8 @@ ggplot(enrichment_long, aes(x = Cluster, y = n_cells, fill = Dataset)) +
     theme_minimal() +
     labs(y = "Number of cells", x = "Cluster") + 
     
-    scale_y_continuous(expand = c(0, 0)) +   # bars touch y = 0
-    scale_x_discrete(expand = c(0, 0)) +     # no side padding
+    scale_y_continuous(expand = expansion(mult = c(0, 0.05))) +   # bars touch y = 0
+    scale_x_discrete(expand = c(0, 0.7)) +     # no side padding
     theme_minimal() +
     theme(
         panel.grid = element_blank(),              # remove gridlines
