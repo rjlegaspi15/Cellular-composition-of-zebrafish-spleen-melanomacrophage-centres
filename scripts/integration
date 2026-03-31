@@ -83,21 +83,30 @@ write.csv(cluster_markers, "C:/Your/Path/spleen_cluster_markers.csv", row.names 
 enrichment_df <- cluster_table %>%
   group_by(Cluster, Treatment) %>%
   summarise(n_cells = n(), .groups = "drop") %>%
-  pivot_wider(names_from = Treatment, values_from = n_cells, values_fill = 0) %>%
-  mutate(Total = MMC + PBS,
-         Fraction_MMC = MMC / Total,
-         Fraction_PBS = PBS / Total,
-         Enrichment_Score = Fraction_MMC - Fraction_PBS)  # positive = MMC enriched
+  tidyr::pivot_wider(names_from = Treatment,
+                     values_from = n_cells,
+                     values_fill = 0)  # ensures 0 if missing
 
-# Order clusters by enrichment score
+# Make sure column names are standard
+colnames(enrichment_df) <- c("Cluster", "MMC", "PBS")
+
+# Add totals and enrichment score
+enrichment_df <- enrichment_df %>%
+  mutate(Total_cells = MMC + PBS,
+         Fraction_MMC = MMC / Total_cells,
+         Fraction_PBS = PBS / Total_cells,
+         Enrichment_Score = Fraction_MMC - Fraction_PBS)
+
+# Order clusters by enrichment
 enrichment_df$Cluster <- factor(enrichment_df$Cluster,
                                 levels = enrichment_df$Cluster[order(enrichment_df$Enrichment_Score, decreasing = TRUE)])
 
 # ===========================
-# 9. Barplot of enrichment
+# 9. Barplot of enrichment with cell counts
 # ===========================
 ggplot(enrichment_df, aes(x = Cluster, y = Enrichment_Score, fill = Enrichment_Score > 0)) +
   geom_bar(stat = "identity") +
+  geom_text(aes(label = Total_cells), vjust = -0.5, size = 3) +  # add total cells on top
   scale_fill_manual(values = c("FALSE" = "lightgrey", "TRUE" = "steelblue")) +
   theme_minimal() +
   labs(title = "Cluster Enrichment MMC vs PBS",
