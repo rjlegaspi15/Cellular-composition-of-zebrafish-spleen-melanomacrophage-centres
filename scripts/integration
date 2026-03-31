@@ -12,6 +12,24 @@ library(ggplot2)
 # 1. LOAD & PREPROCESS DATASETS
 # ----------------------------
 
+
+spleen_ref[["percent.mt"]] <- PercentageFeatureSet(spleen_ref, pattern = "^MT-")
+spleen_ref <- subset(spleen_ref, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 5)
+
+# 1B. Microstructure
+spleen_ncbi <- CreateSeuratObject(
+  counts = spleen_counts_ncbi,
+  project = "spleen_ncbi",
+  min.cells = 3,
+  min.features = 200
+)
+
+if (!"percent.mt" %in% colnames(spleen_ncbi@meta.data)) {
+  spleen_ncbi[["percent.mt"]] <- PercentageFeatureSet(spleen_ncbi, pattern = "^MT-")
+}
+spleen_ncbi <- subset(spleen_ncbi, subset = nFeature_RNA > 200 & percent.mt < 5)
+
+
 # Annotate treatment groups for enrichment
 spleen_ref$Treatment <- "PBS"
 spleen_ncbi$Treatment <- "MMC"
